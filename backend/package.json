@@ -4,7 +4,7 @@
   "description": "",
   "license": "ISC",
   "author": "Aryan-Dot-Dev, kaz004",
-  "type": "commonjs",
+  "type": "module",
   "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -12,6 +12,7 @@
     "dev": "nodemon server.js"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.54.0",
     "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
