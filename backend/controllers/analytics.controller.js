@@ -3,13 +3,8 @@ import { supabase } from "../config/supabase.js";
 // Get overview statistics
 const getOverviewStats = async (req, res) => {
     try {
-        // User is already authenticated and verified as admin via middleware
-        console.log('📊 Admin user accessing overview stats:', req.user.id);
-
-        // Get total users count
-        const { count: totalUsers, error: usersError } = await supabase
-            .from('users')
-            .select('*', { count: 'exact', head: true });
+        // User is already authenticated via middleware
+        console.log('📊 User accessing overview stats:', req.user.id);
 
         // Get total trips count
         const { count: totalTrips, error: tripsError } = await supabase
@@ -24,6 +19,11 @@ const getOverviewStats = async (req, res) => {
         // Get total stops count
         const { count: totalStops, error: stopsError } = await supabase
             .from('stops')
+            .select('*', { count: 'exact', head: true });
+
+        // Get total users count
+        const { count: totalUsers, error: usersError } = await supabase
+            .from('users')
             .select('*', { count: 'exact', head: true });
 
         // Get trips created in last 30 days
@@ -41,8 +41,10 @@ const getOverviewStats = async (req, res) => {
             .select('*', { count: 'exact', head: true })
             .gte('created_at', thirtyDaysAgo.toISOString());
 
-        if (usersError || tripsError || activitiesError || stopsError || recentTripsError || newUsersError) {
-            console.error('Error fetching overview stats:', { usersError, tripsError, activitiesError, stopsError, recentTripsError, newUsersError });
+        if (tripsError || activitiesError || stopsError || usersError || recentTripsError || newUsersError) {
+            console.error('Error fetching overview stats:', { 
+                tripsError, activitiesError, stopsError, usersError, recentTripsError, newUsersError 
+            });
             return res.status(500).json({ message: 'Error fetching overview statistics' });
         }
 
@@ -67,22 +69,22 @@ const getOverviewStats = async (req, res) => {
 // Get popular destinations
 const getPopularDestinations = async (req, res) => {
     try {
-        // User is already authenticated and verified as admin via middleware
-        console.log('📊 Admin user accessing popular destinations:', req.user.id);
+        // User is already authenticated via middleware
+        console.log('📊 User accessing popular destinations:', req.user.id);
 
-        // Get popular start destinations
+        // Get all start destinations
         const { data: startDestinations, error: startError } = await supabase
             .from('trips')
             .select('start_destination')
             .not('start_destination', 'is', null);
 
-        // Get popular end destinations
+        // Get all end destinations
         const { data: endDestinations, error: endError } = await supabase
             .from('trips')
             .select('end_destination')
             .not('end_destination', 'is', null);
 
-        // Get popular stops
+        // Get all stops
         const { data: stops, error: stopsError } = await supabase
             .from('stops')
             .select('destination')
@@ -140,8 +142,8 @@ const getPopularDestinations = async (req, res) => {
 // Get popular activities
 const getPopularActivities = async (req, res) => {
     try {
-        // User is already authenticated and verified as admin via middleware
-        console.log('📊 Admin user accessing popular activities:', req.user.id);
+        // User is already authenticated via middleware
+        console.log('📊 User accessing popular activities:', req.user.id);
 
         // Get all activities
         const { data: activities, error: activitiesError } = await supabase
@@ -183,10 +185,10 @@ const getPopularActivities = async (req, res) => {
 // Get user engagement stats
 const getUserEngagement = async (req, res) => {
     try {
-        // User is already authenticated and verified as admin via middleware
-        console.log('📊 Admin user accessing user engagement:', req.user.id);
+        // User is already authenticated via middleware
+        console.log('📊 User accessing user engagement:', req.user.id);
 
-        // Get trips created per month for the last 6 months
+        // Get all trips created per month for the last 6 months
         const sixMonthsAgo = new Date();
         sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
@@ -196,15 +198,15 @@ const getUserEngagement = async (req, res) => {
             .gte('created_at', sixMonthsAgo.toISOString())
             .order('created_at', { ascending: true });
 
-        // Get user registration data for last 6 months
-        const { data: monthlyUsers, error: monthlyUsersError } = await supabase
-            .from('users')
+        // Get all activities created per month for the last 6 months
+        const { data: monthlyActivities, error: monthlyActivitiesError } = await supabase
+            .from('activities')
             .select('created_at')
             .gte('created_at', sixMonthsAgo.toISOString())
             .order('created_at', { ascending: true });
 
-        if (monthlyTripsError || monthlyUsersError) {
-            console.error('Error fetching engagement data:', { monthlyTripsError, monthlyUsersError });
+        if (monthlyTripsError || monthlyActivitiesError) {
+            console.error('Error fetching engagement data:', { monthlyTripsError, monthlyActivitiesError });
             return res.status(500).json({ message: 'Error fetching engagement data' });
         }
 
@@ -216,7 +218,7 @@ const getUserEngagement = async (req, res) => {
             const date = new Date();
             date.setMonth(date.getMonth() - i);
             const monthKey = date.toISOString().slice(0, 7); // YYYY-MM format
-            monthlyData[monthKey] = { trips: 0, users: 0, month: date.toLocaleDateString('en-US', { year: 'numeric', month: 'short' }) };
+            monthlyData[monthKey] = { trips: 0, activities: 0, month: date.toLocaleDateString('en-US', { year: 'numeric', month: 'short' }) };
         }
 
         // Count trips per month
@@ -227,11 +229,11 @@ const getUserEngagement = async (req, res) => {
             }
         });
 
-        // Count users per month
-        monthlyUsers?.forEach(user => {
-            const monthKey = user.created_at.slice(0, 7);
+        // Count activities per month
+        monthlyActivities?.forEach(activity => {
+            const monthKey = activity.created_at.slice(0, 7);
             if (monthlyData[monthKey]) {
-                monthlyData[monthKey].users++;
+                monthlyData[monthKey].activities++;
             }
         });
 
@@ -251,13 +253,14 @@ const getUserEngagement = async (req, res) => {
 // Get user management data
 const getUserManagement = async (req, res) => {
     try {
-        // User is already authenticated and verified as admin via middleware
-        console.log('📊 Admin user accessing user management:', req.user.id);
+        // User is already authenticated via middleware
+        console.log('📊 User accessing user management:', req.user.id);
 
-        const { page = 1, limit = 10 } = req.query;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
         const offset = (page - 1) * limit;
 
-        // Get users with their trip counts
+        // Get all users with pagination
         const { data: users, error: usersError } = await supabase
             .from('users')
             .select(`
@@ -270,17 +273,22 @@ const getUserManagement = async (req, res) => {
                 created_at
             `)
             .order('created_at', { ascending: false })
-            .range(offset, offset + parseInt(limit) - 1);
+            .range(offset, offset + limit - 1);
 
-        if (usersError) {
-            console.error('Error fetching users:', usersError);
-            return res.status(500).json({ message: 'Error fetching users data' });
+        // Get total count of users
+        const { count: totalUsers, error: countError } = await supabase
+            .from('users')
+            .select('*', { count: 'exact', head: true });
+
+        if (usersError || countError) {
+            console.error('Error fetching users:', { usersError, countError });
+            return res.status(500).json({ message: 'Error fetching user data' });
         }
 
         // Get trip counts for each user
         const usersWithTripCounts = await Promise.all(
             users.map(async (user) => {
-                const { count: tripCount, error: tripError } = await supabase
+                const { count: tripCount } = await supabase
                     .from('trips')
                     .select('*', { count: 'exact', head: true })
                     .eq('admin_id', user.id);
@@ -292,24 +300,16 @@ const getUserManagement = async (req, res) => {
             })
         );
 
-        // Get total count for pagination
-        const { count: totalUsers, error: countError } = await supabase
-            .from('users')
-            .select('*', { count: 'exact', head: true });
-
-        if (countError) {
-            console.error('Error fetching user count:', countError);
-            return res.status(500).json({ message: 'Error fetching user count' });
-        }
+        const totalPages = Math.ceil(totalUsers / limit);
 
         return res.status(200).json({
-            message: 'Users fetched successfully',
+            message: 'User data fetched successfully',
             users: usersWithTripCounts,
             pagination: {
-                currentPage: parseInt(page),
-                totalPages: Math.ceil(totalUsers / limit),
-                totalUsers: totalUsers,
-                limit: parseInt(limit)
+                currentPage: page,
+                totalPages,
+                totalUsers,
+                limit
             }
         });
 

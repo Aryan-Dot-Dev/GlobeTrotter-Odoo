@@ -2,7 +2,8 @@ import { supabase } from "../config/supabase.js";
 import axios from 'axios';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`;
+// Updated to use stable Gemini model instead of experimental
+const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
 
 // Create a new trip
 const createTrip = async (req, res) => {
@@ -431,12 +432,31 @@ const autoSchedule = async (req, res) => {
     const { activities, startDate, endDate, places } = req.body;
     
     try {
-        console.log('🤖 AI auto-scheduling activities:', { 
-            activitiesCount: activities.length, 
+        console.log('🤖 AI auto-scheduling request received:', { 
+            activitiesCount: activities?.length || 0, 
+            activities: activities,
             startDate, 
             endDate, 
-            placesCount: places.length 
+            placesCount: places?.length || 0 
         });
+
+        // Input validation
+        if (!activities || !Array.isArray(activities) || activities.length === 0) {
+            console.log('❌ No activities provided for scheduling');
+            return res.status(400).json({
+                message: "No activities provided for scheduling",
+                scheduledActivities: [],
+                debug: { activitiesProvided: activities }
+            });
+        }
+
+        if (!startDate || !endDate) {
+            console.log('❌ Missing date information');
+            return res.status(400).json({
+                message: "Start date and end date are required",
+                scheduledActivities: []
+            });
+        }
 
         const start = new Date(startDate);
         const end = new Date(endDate);
@@ -498,48 +518,103 @@ Remember: Return EXACTLY ${activities.length} activities. Do NOT add extras.`;
             }
         };
 
+        console.log('📡 Calling Gemini API with:', {
+            apiUrl: GEMINI_API_URL,
+            hasApiKey: !!GEMINI_API_KEY,
+            activitiesCount: activities.length
+        });
+
         const response = await axios.post(GEMINI_API_URL, requestBody, {
             headers: {
                 'Content-Type': 'application/json'
             }
         });
 
+        console.log('📡 Gemini API Response Status:', response.status);
+        console.log('📡 Gemini API Response Structure:', {
+            hasCandidates: !!response.data?.candidates,
+            candidatesCount: response.data?.candidates?.length || 0,
+            hasContent: !!response.data?.candidates?.[0]?.content,
+            hasParts: !!response.data?.candidates?.[0]?.content?.parts,
+            hasText: !!response.data?.candidates?.[0]?.content?.parts?.[0]?.text
+        });
+
         if (response.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
-            const jsonResponse = JSON.parse(response.data.candidates[0].content.parts[0].text);
+            const rawText = response.data.candidates[0].content.parts[0].text;
+            console.log('📡 Raw Gemini Response:', rawText.substring(0, 500) + '...');
             
-            // Validate that AI returned exactly the activities we sent
-            const aiActivities = jsonResponse.scheduledActivities || [];
-            
-            console.log(`📊 AI Scheduling Validation:
-                - Input activities: ${activities.length}
-                - AI returned activities: ${aiActivities.length}
-                - Expected match: ${activities.length === aiActivities.length ? '✅' : '❌'}`);
-            
-            // Filter to only include activities that match our input
-            const validActivities = aiActivities.filter(aiActivity => {
-                return activities.some(inputActivity => 
-                    inputActivity.name === aiActivity.name && 
-                    inputActivity.place === aiActivity.place
-                );
-            });
-            
-            console.log(`📋 Activity Validation:
-                - Valid activities: ${validActivities.length}
-                - Filtered out: ${aiActivities.length - validActivities.length}`);
-            
-            return res.status(200).json({
-                message: "Activities scheduled successfully",
-                scheduledActivities: validActivities
-            });
+            try {
+                const jsonResponse = JSON.parse(rawText);
+                console.log('📡 Parsed JSON Response:', jsonResponse);
+                
+                // Validate that AI returned exactly the activities we sent
+                const aiActivities = jsonResponse.scheduledActivities || [];
+                
+                console.log(`📊 AI Scheduling Validation:
+                    - Input activities: ${activities.length}
+                    - AI returned activities: ${aiActivities.length}
+                    - Expected match: ${activities.length === aiActivities.length ? '✅' : '❌'}`);
+                
+                if (aiActivities.length === 0) {
+                    console.log('⚠️ AI returned empty scheduledActivities array');
+                }
+                
+                // Filter to only include activities that match our input
+                const validActivities = aiActivities.filter(aiActivity => {
+                    const matchFound = activities.some(inputActivity => 
+                        inputActivity.name === aiActivity.name && 
+                        inputActivity.place === aiActivity.place
+                    );
+                    
+                    if (!matchFound) {
+                        console.log(`❌ No match found for AI activity: "${aiActivity.name}" at "${aiActivity.place}"`);
+                        console.log('Available input activities:', activities.map(a => `"${a.name}" at "${a.place}"`));
+                    }
+                    
+                    return matchFound;
+                });
+                
+                console.log(`📋 Activity Validation:
+                    - Valid activities: ${validActivities.length}
+                    - Filtered out: ${aiActivities.length - validActivities.length}`);
+                
+                if (validActivities.length === 0) {
+                    console.log('🚨 No valid activities after filtering! Using fallback.');
+                    throw new Error('No valid activities after filtering');
+                }
+                
+                return res.status(200).json({
+                    message: "Activities scheduled successfully",
+                    scheduledActivities: validActivities
+                });
+                
+            } catch (parseError) {
+                console.error('❌ JSON Parse Error:', parseError.message);
+                console.log('Raw response that failed to parse:', rawText);
+                throw new Error('Failed to parse Gemini API response as JSON');
+            }
         } else {
             throw new Error('Invalid response structure from Gemini API');
         }
 
     } catch (error) {
-        console.error('Error auto-scheduling:', error);
+        console.error('❌ Error auto-scheduling:', error.message);
+        console.error('❌ Full error:', error);
+        
+        // Additional validation before fallback
+        if (!activities || activities.length === 0) {
+            console.log('❌ Cannot use fallback: No activities provided');
+            return res.status(400).json({
+                message: "No activities provided for scheduling",
+                scheduledActivities: [],
+                error: "No input activities to schedule"
+            });
+        }
         
         // Fallback: Simple auto-scheduling algorithm using ONLY the input activities
         console.log('🔄 Using fallback scheduling for', activities.length, 'activities');
+        console.log('🔄 Fallback input activities:', activities.map(a => `${a.name} at ${a.place}`));
+        
         const start = new Date(startDate);
         const end = new Date(endDate);
         const totalDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
@@ -561,10 +636,16 @@ Remember: Return EXACTLY ${activities.length} activities. Do NOT add extras.`;
             };
         });
 
+        console.log('🔄 Fallback generated', scheduledActivities.length, 'scheduled activities');
+
         return res.status(200).json({
             message: "Activities scheduled successfully (fallback)",
             scheduledActivities,
-            note: "Using fallback scheduling due to AI service unavailability"
+            note: "Using fallback scheduling due to AI service unavailability",
+            debug: {
+                originalError: error.message,
+                fallbackCount: scheduledActivities.length
+            }
         });
     }
 };

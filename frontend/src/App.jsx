@@ -68,9 +68,7 @@ const App = () => {
         } />
         <Route path="/analytics" element={
           <ProtectedRoute>
-            <AdminRoute>
               <Analytics />
-            </AdminRoute>
           </ProtectedRoute>
         } />
       </Routes>
