@@ -1,5 +1,5 @@
 import express from 'express';
-import { getUserTrips, getUserProfile, updateUserProfile, getUserStats, getUserTripDetails, makeUserAdmin } from '../controllers/user.controller.js';
+import { getUserTrips, getUserProfile, updateUserProfile, getUserStats, getUserTripDetails, makeUserAdmin, updateUserProfileExtended, changePassword } from '../controllers/user.controller.js';
 import { authenticate } from '../middleware/auth.js';
 
 const userRouter = express.Router();
@@ -18,6 +18,12 @@ userRouter.get('/profile', getUserProfile);
 
 // Update user profile
 userRouter.put('/profile', updateUserProfile);
+
+// Update user profile (extended for settings page)
+userRouter.put('/profile/settings', updateUserProfileExtended);
+
+// Change password
+userRouter.put('/change-password', changePassword);
 
 // Get user statistics
 userRouter.get('/stats', getUserStats);

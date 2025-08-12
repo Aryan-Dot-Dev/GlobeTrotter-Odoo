@@ -84,6 +84,16 @@ const UserNav = () => {
                 <Button
                     variant="ghost"
                     size="sm"
+                    onClick={() => navigate('/settings')}
+                    className="flex items-center space-x-2 text-white hover:bg-white/20 transition-all duration-200"
+                >
+                    <Settings className="w-4 h-4" />
+                    <span className="hidden sm:inline font-medium">Settings</span>
+                </Button>
+
+                <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={handleLogout}
                     className="flex items-center space-x-2 text-red-300 hover:text-red-200 hover:bg-red-500/20 transition-all duration-200"
                 >

@@ -4,8 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, User, Mail, MapPin, Upload, X, Save, AlertCircle, CheckCircle, Camera } from "lucide-react";
-import { getUserProfile, updateUserProfile } from '@/api/user.api';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ArrowLeft, User, Mail, MapPin, Upload, X, Save, AlertCircle, CheckCircle, Camera, Lock, Eye, EyeOff } from "lucide-react";
+import { getUserProfile } from '@/api/user.api';
+import { updateUserProfile, changePassword } from '@/api/settings.api';
 
 const Settings = () => {
     const navigate = useNavigate();
@@ -17,6 +19,16 @@ const Settings = () => {
         email: '',
         location: '',
         avatar_url: ''
+    });
+    const [passwordForm, setPasswordForm] = useState({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+    });
+    const [showPasswords, setShowPasswords] = useState({
+        current: false,
+        new: false,
+        confirm: false
     });
     const [avatarFile, setAvatarFile] = useState(null);
     const [avatarPreview, setAvatarPreview] = useState(null);
@@ -44,6 +56,20 @@ const Settings = () => {
         setProfile(prev => ({
             ...prev,
             [field]: value
+        }));
+    };
+
+    const handlePasswordInputChange = (field, value) => {
+        setPasswordForm(prev => ({
+            ...prev,
+            [field]: value
+        }));
+    };
+
+    const togglePasswordVisibility = (field) => {
+        setShowPasswords(prev => ({
+            ...prev,
+            [field]: !prev[field]
         }));
     };
 
@@ -83,7 +109,7 @@ const Settings = () => {
         setProfile(prev => ({ ...prev, avatar_url: '' }));
     };
 
-    const handleSave = async () => {
+    const handleProfileSave = async () => {
         try {
             setSaving(true);
             setMessage({ type: '', text: '' });
@@ -112,7 +138,7 @@ const Settings = () => {
 
             const response = await updateUserProfile(updateData);
             
-            setProfile(response.profile);
+            setProfile(response.user);
             setMessage({ type: 'success', text: 'Profile updated successfully!' });
             
             // Clear success message after 3 seconds
@@ -122,8 +148,53 @@ const Settings = () => {
 
         } catch (error) {
             console.error('Error updating profile:', error);
-            const errorMessage = error.response?.data?.message || 'Failed to update profile';
+            const errorMessage = error.response?.data?.error || 'Failed to update profile';
             setMessage({ type: 'error', text: errorMessage });
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handlePasswordSubmit = async (e) => {
+        e.preventDefault();
+        
+        if (!passwordForm.currentPassword || !passwordForm.newPassword) {
+            setMessage({ type: 'error', text: 'Current password and new password are required' });
+            return;
+        }
+
+        if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+            setMessage({ type: 'error', text: 'New passwords do not match' });
+            return;
+        }
+
+        if (passwordForm.newPassword.length < 6) {
+            setMessage({ type: 'error', text: 'New password must be at least 6 characters long' });
+            return;
+        }
+
+        try {
+            setSaving(true);
+            setMessage({ type: '', text: '' });
+
+            await changePassword({
+                currentPassword: passwordForm.currentPassword,
+                newPassword: passwordForm.newPassword
+            });
+
+            setMessage({ type: 'success', text: 'Password changed successfully!' });
+            setPasswordForm({
+                currentPassword: '',
+                newPassword: '',
+                confirmPassword: ''
+            });
+
+            // Clear message after 3 seconds
+            setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+
+        } catch (error) {
+            console.error('Error changing password:', error);
+            setMessage({ type: 'error', text: error.response?.data?.error || 'Failed to change password' });
         } finally {
             setSaving(false);
         }
@@ -143,7 +214,7 @@ const Settings = () => {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 p-4">
-            <div className="max-w-2xl mx-auto">
+            <div className="max-w-4xl mx-auto">
                 {/* Header */}
                 <div className="flex items-center mb-8">
                     <Button
@@ -173,137 +244,258 @@ const Settings = () => {
                     </div>
                 )}
 
-                {/* Profile Settings Card */}
-                <Card className="bg-gray-800/50 border-gray-700">
-                    <CardHeader>
-                        <CardTitle className="text-white flex items-center">
-                            <User className="w-5 h-5 mr-2" />
-                            Profile Information
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-6">
-                        {/* Avatar Section */}
-                        <div className="flex items-center space-x-4">
-                            <div className="relative">
-                                {avatarPreview ? (
-                                    <div className="relative w-20 h-20 rounded-full overflow-hidden bg-gray-700">
-                                        <img
-                                            src={avatarPreview}
-                                            alt="Avatar preview"
-                                            className="w-full h-full object-cover"
+                {/* Settings Tabs */}
+                <Tabs defaultValue="profile" className="space-y-6">
+                    <TabsList className="bg-gray-800/50 border-gray-700">
+                        <TabsTrigger value="profile" className="data-[state=active]:bg-gray-700 text-gray-300">
+                            <User className="w-4 h-4 mr-2" />
+                            Profile
+                        </TabsTrigger>
+                        <TabsTrigger value="security" className="data-[state=active]:bg-gray-700 text-gray-300">
+                            <Lock className="w-4 h-4 mr-2" />
+                            Security
+                        </TabsTrigger>
+                    </TabsList>
+
+                    {/* Profile Tab */}
+                    <TabsContent value="profile">
+                        <Card className="bg-gray-800/50 border-gray-700">
+                            <CardHeader>
+                                <CardTitle className="text-white flex items-center">
+                                    <User className="w-5 h-5 mr-2" />
+                                    Profile Information
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-6">
+                                {/* Avatar Section */}
+                                <div className="flex items-center space-x-4">
+                                    <div className="relative">
+                                        {avatarPreview ? (
+                                            <div className="relative w-20 h-20 rounded-full overflow-hidden bg-gray-700">
+                                                <img
+                                                    src={avatarPreview}
+                                                    alt="Avatar preview"
+                                                    className="w-full h-full object-cover"
+                                                />
+                                                <button
+                                                    onClick={removeAvatar}
+                                                    className="absolute -top-2 -right-2 bg-red-600 hover:bg-red-700 rounded-full p-1 transition-colors"
+                                                >
+                                                    <X className="w-3 h-3 text-white" />
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="w-20 h-20 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white text-2xl font-semibold">
+                                                {profile.name ? profile.name.charAt(0).toUpperCase() : 'U'}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <Label className="text-gray-300 block mb-2">Profile Picture</Label>
+                                        <Label htmlFor="avatar-upload" className="cursor-pointer">
+                                            <div className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-white text-sm transition-colors">
+                                                <Camera className="w-4 h-4" />
+                                                <span>Change Avatar</span>
+                                            </div>
+                                        </Label>
+                                        <input
+                                            id="avatar-upload"
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleFileChange}
+                                            className="hidden"
                                         />
-                                        <button
-                                            onClick={removeAvatar}
-                                            className="absolute -top-2 -right-2 bg-red-600 hover:bg-red-700 rounded-full p-1 transition-colors"
+                                    </div>
+                                </div>
+
+                                {/* Name Field */}
+                                <div>
+                                    <Label htmlFor="name" className="text-gray-300">Full Name *</Label>
+                                    <Input
+                                        id="name"
+                                        type="text"
+                                        value={profile.name || ''}
+                                        onChange={(e) => handleInputChange('name', e.target.value)}
+                                        placeholder="Enter your full name"
+                                        className="mt-1 bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-400"
+                                        required
+                                    />
+                                </div>
+
+                                {/* Username Field */}
+                                <div>
+                                    <Label htmlFor="username" className="text-gray-300">Username *</Label>
+                                    <Input
+                                        id="username"
+                                        type="text"
+                                        value={profile.username || ''}
+                                        onChange={(e) => handleInputChange('username', e.target.value)}
+                                        placeholder="Enter your username"
+                                        className="mt-1 bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-400"
+                                        required
+                                    />
+                                </div>
+
+                                {/* Email Field (Read-only) */}
+                                <div>
+                                    <Label htmlFor="email" className="text-gray-300">Email Address</Label>
+                                    <div className="relative">
+                                        <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                        <Input
+                                            id="email"
+                                            type="email"
+                                            value={profile.email || ''}
+                                            readOnly
+                                            placeholder="Email address"
+                                            className="mt-1 pl-10 bg-gray-600 border-gray-500 text-gray-300 cursor-not-allowed"
+                                        />
+                                    </div>
+                                    <p className="text-xs text-gray-400 mt-1">Email cannot be changed</p>
+                                </div>
+
+                                {/* Location Field */}
+                                <div>
+                                    <Label htmlFor="location" className="text-gray-300">Location</Label>
+                                    <div className="relative">
+                                        <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                        <Input
+                                            id="location"
+                                            type="text"
+                                            value={profile.location || ''}
+                                            onChange={(e) => handleInputChange('location', e.target.value)}
+                                            placeholder="Enter your location"
+                                            className="mt-1 pl-10 bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-400"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Save Button */}
+                                <div className="pt-4">
+                                    <Button
+                                        onClick={handleProfileSave}
+                                        disabled={saving}
+                                        className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium py-3"
+                                    >
+                                        {saving ? (
+                                            <>
+                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                                Saving...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Save className="w-4 h-4 mr-2" />
+                                                Save Changes
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+
+                    {/* Security Tab */}
+                    <TabsContent value="security">
+                        <Card className="bg-gray-800/50 border-gray-700">
+                            <CardHeader>
+                                <CardTitle className="text-white flex items-center">
+                                    <Lock className="w-5 h-5 mr-2" />
+                                    Change Password
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <form onSubmit={handlePasswordSubmit} className="space-y-4">
+                                    <div>
+                                        <Label htmlFor="currentPassword" className="text-gray-300">Current Password *</Label>
+                                        <div className="relative">
+                                            <Input
+                                                id="currentPassword"
+                                                type={showPasswords.current ? "text" : "password"}
+                                                value={passwordForm.currentPassword}
+                                                onChange={(e) => handlePasswordInputChange('currentPassword', e.target.value)}
+                                                placeholder="Enter current password"
+                                                className="mt-1 bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-400 pr-10"
+                                                required
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => togglePasswordVisibility('current')}
+                                                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
+                                            >
+                                                {showPasswords.current ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <Label htmlFor="newPassword" className="text-gray-300">New Password *</Label>
+                                        <div className="relative">
+                                            <Input
+                                                id="newPassword"
+                                                type={showPasswords.new ? "text" : "password"}
+                                                value={passwordForm.newPassword}
+                                                onChange={(e) => handlePasswordInputChange('newPassword', e.target.value)}
+                                                placeholder="Enter new password"
+                                                className="mt-1 bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-400 pr-10"
+                                                required
+                                                minLength={6}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => togglePasswordVisibility('new')}
+                                                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
+                                            >
+                                                {showPasswords.new ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <Label htmlFor="confirmPassword" className="text-gray-300">Confirm New Password *</Label>
+                                        <div className="relative">
+                                            <Input
+                                                id="confirmPassword"
+                                                type={showPasswords.confirm ? "text" : "password"}
+                                                value={passwordForm.confirmPassword}
+                                                onChange={(e) => handlePasswordInputChange('confirmPassword', e.target.value)}
+                                                placeholder="Confirm new password"
+                                                className="mt-1 bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-400 pr-10"
+                                                required
+                                                minLength={6}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => togglePasswordVisibility('confirm')}
+                                                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
+                                            >
+                                                {showPasswords.confirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-4">
+                                        <Button
+                                            type="submit"
+                                            disabled={saving}
+                                            className="w-full bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 text-white font-medium py-3"
                                         >
-                                            <X className="w-3 h-3 text-white" />
-                                        </button>
+                                            {saving ? (
+                                                <>
+                                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                                    Changing...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Lock className="w-4 h-4 mr-2" />
+                                                    Change Password
+                                                </>
+                                            )}
+                                        </Button>
                                     </div>
-                                ) : (
-                                    <div className="w-20 h-20 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white text-2xl font-semibold">
-                                        {profile.name ? profile.name.charAt(0).toUpperCase() : 'U'}
-                                    </div>
-                                )}
-                            </div>
-                            <div>
-                                <Label className="text-gray-300 block mb-2">Profile Picture</Label>
-                                <Label htmlFor="avatar-upload" className="cursor-pointer">
-                                    <div className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-white text-sm transition-colors">
-                                        <Camera className="w-4 h-4" />
-                                        <span>Change Avatar</span>
-                                    </div>
-                                </Label>
-                                <input
-                                    id="avatar-upload"
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={handleFileChange}
-                                    className="hidden"
-                                />
-                            </div>
-                        </div>
-
-                        {/* Name Field */}
-                        <div>
-                            <Label htmlFor="name" className="text-gray-300">Full Name</Label>
-                            <Input
-                                id="name"
-                                type="text"
-                                value={profile.name || ''}
-                                onChange={(e) => handleInputChange('name', e.target.value)}
-                                placeholder="Enter your full name"
-                                className="mt-1 bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-400"
-                            />
-                        </div>
-
-                        {/* Username Field */}
-                        <div>
-                            <Label htmlFor="username" className="text-gray-300">Username</Label>
-                            <Input
-                                id="username"
-                                type="text"
-                                value={profile.username || ''}
-                                onChange={(e) => handleInputChange('username', e.target.value)}
-                                placeholder="Enter your username"
-                                className="mt-1 bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-400"
-                            />
-                        </div>
-
-                        {/* Email Field (Read-only) */}
-                        <div>
-                            <Label htmlFor="email" className="text-gray-300">Email Address</Label>
-                            <div className="relative">
-                                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <Input
-                                    id="email"
-                                    type="email"
-                                    value={profile.email || ''}
-                                    readOnly
-                                    placeholder="Email address"
-                                    className="mt-1 pl-10 bg-gray-600 border-gray-500 text-gray-300 cursor-not-allowed"
-                                />
-                            </div>
-                            <p className="text-xs text-gray-400 mt-1">Email cannot be changed</p>
-                        </div>
-
-                        {/* Location Field */}
-                        <div>
-                            <Label htmlFor="location" className="text-gray-300">Location</Label>
-                            <div className="relative">
-                                <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <Input
-                                    id="location"
-                                    type="text"
-                                    value={profile.location || ''}
-                                    onChange={(e) => handleInputChange('location', e.target.value)}
-                                    placeholder="Enter your location"
-                                    className="mt-1 pl-10 bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-400"
-                                />
-                            </div>
-                        </div>
-
-                        {/* Save Button */}
-                        <div className="pt-4">
-                            <Button
-                                onClick={handleSave}
-                                disabled={saving}
-                                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium py-3"
-                            >
-                                {saving ? (
-                                    <>
-                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                        Saving...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Save className="w-4 h-4 mr-2" />
-                                        Save Changes
-                                    </>
-                                )}
-                            </Button>
-                        </div>
-                    </CardContent>
-                </Card>
+                                </form>
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+                </Tabs>
             </div>
         </div>
     );

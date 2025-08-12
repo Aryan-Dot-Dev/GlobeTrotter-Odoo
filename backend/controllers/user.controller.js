@@ -416,4 +416,101 @@ const makeUserAdmin = async (req, res) => {
     }
 };
 
-export { getUserTrips, getUserProfile, updateUserProfile, getUserStats, getUserTripDetails, makeUserAdmin };
+// Update user profile with extended validation
+const updateUserProfileExtended = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { name, username, location, avatar_url } = req.body;
+
+        // Validate required fields
+        if (!name || !username) {
+            return res.status(400).json({
+                error: 'Name and username are required'
+            });
+        }
+
+        // Check if username is already taken by another user
+        const { data: existingUser, error: checkError } = await supabase
+            .from('users')
+            .select('id')
+            .eq('username', username)
+            .neq('id', userId)
+            .single();
+
+        if (checkError && checkError.code !== 'PGRST116') { // PGRST116 means no rows found
+            console.error('Error checking username:', checkError);
+            return res.status(500).json({ error: 'Failed to validate username' });
+        }
+
+        if (existingUser) {
+            return res.status(400).json({
+                error: 'Username is already taken'
+            });
+        }
+
+        // Update user profile
+        const { data: updatedUser, error: updateError } = await supabase
+            .from('users')
+            .update({
+                name: name.trim(),
+                username: username.trim().toLowerCase(),
+                location: location?.trim() || null,
+                avatar_url: avatar_url?.trim() || null
+            })
+            .eq('id', userId)
+            .select()
+            .single();
+
+        if (updateError) {
+            console.error('Error updating user profile:', updateError);
+            return res.status(500).json({ error: 'Failed to update profile' });
+        }
+
+        res.json({
+            message: 'Profile updated successfully',
+            user: updatedUser
+        });
+
+    } catch (error) {
+        console.error('Error in updateUserProfileExtended:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+// Change user password
+const changePassword = async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+        const userId = req.user.id;
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({
+                error: 'Current password and new password are required'
+            });
+        }
+
+        if (newPassword.length < 6) {
+            return res.status(400).json({
+                error: 'New password must be at least 6 characters long'
+            });
+        }
+
+        // Use Supabase Auth to update password
+        const { error } = await supabase.auth.admin.updateUserById(userId, {
+            password: newPassword
+        });
+
+        if (error) {
+            console.error('Error changing password:', error);
+            return res.status(400).json({ error: 'Failed to change password' });
+        }
+
+        res.json({ message: 'Password changed successfully' });
+
+    } catch (error) {
+        console.error('Error in changePassword:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+export { getUserTrips, getUserProfile, updateUserProfile, getUserStats, getUserTripDetails, makeUserAdmin, updateUserProfileExtended, changePassword };
