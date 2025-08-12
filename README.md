@@ -13,5 +13,8 @@
 - Share their plans publicly or with friends
 
 
-## Video URL
+## Video URL (no audio)
 https://drive.google.com/file/d/1sWyJLRy_tv2SsZFzC3rQoG8pRPWl07C9/view?usp=sharing
+
+## Video URL (with audio)
+https://drive.google.com/file/d/1YAgAYyvhcmZogbJmOoL6gLbWFx3N2yL3/view?usp=sharing
