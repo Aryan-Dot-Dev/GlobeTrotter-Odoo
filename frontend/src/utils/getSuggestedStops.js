@@ -5,7 +5,7 @@ const BACKEND_URL = 'http://localhost:3000'; // Your backend URL
 export const getSuggestedStops = async (startDestination, endDestination, duration = '3-5 days') => {
   try {
     const prompt = `
-Please suggest places to explore between ${startDestination} and ${endDestination} for a ${duration} trip.
+Please suggest places to explore between ${startDestination} and ${endDestination} and also in ${endDestination} for a ${duration} trip.
 
 Provide a detailed JSON response with the following structure:
 {

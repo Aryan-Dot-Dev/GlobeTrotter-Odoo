@@ -6,6 +6,7 @@ import { ArrowLeft, Calendar, MapPin, Clock, DollarSign, User, Activity, Navigat
 import { getTripDetails, copyTripToAccount } from '@/api/community.api';
 import { getUserTripDetails, getUserProfile } from '@/api/user.api';
 import TripBudgetBreakdown from './TripBudgetBreakdown';
+import { printToPDFLandscape } from '../utils/generateTripPDF'
 
 const TripDetailView = () => {
     const { tripId } = useParams();
@@ -17,11 +18,12 @@ const TripDetailView = () => {
     const [copying, setCopying] = useState(false);
     const [copySuccess, setCopySuccess] = useState(false);
     const [currentUser, setCurrentUser] = useState(null);
+    const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
     // Determine which API to use and back navigation based on route and state
     const isCommunityTrip = window.location.pathname.startsWith('/community/trip/');
     const fromDashboard = location.state?.from === 'dashboard';
-    
+
     const handleBackNavigation = () => {
         if (fromDashboard) {
             navigate('/dashboard');
@@ -37,40 +39,44 @@ const TripDetailView = () => {
         }
     };
 
+    const handleExportPDF = async () => {
+        printToPDFLandscape();
+    }
+
     const handleCopyTrip = async () => {
         try {
             setCopying(true);
             const response = await copyTripToAccount(tripId);
             setCopySuccess(true);
-            
+
             // Show success message for 2 seconds then redirect to edit the copied trip
             setTimeout(() => {
-                navigate('/trip-planner', { 
-                    state: { 
+                navigate('/trip-planner', {
+                    state: {
                         editTripId: response.trip.id,
-                        mode: 'edit' 
-                    } 
+                        mode: 'edit'
+                    }
                 });
             }, 2000);
         } catch (error) {
             console.error('Error copying trip:', error);
             console.log('Error response:', error.response?.data);
-            
+
             // Handle specific error cases
             if (error.response?.data?.code === 'OWN_TRIP_COPY_ATTEMPT') {
                 // User tried to copy their own trip - redirect to edit mode
                 console.log('✅ Redirecting to edit mode for own trip');
-                console.log('🎯 Redirect data:', { 
+                console.log('🎯 Redirect data:', {
                     editTripId: error.response.data.tripId || tripId,
                     mode: 'edit',
-                    fullResponse: error.response.data 
+                    fullResponse: error.response.data
                 });
-                
-                navigate('/trip-planner', { 
-                    state: { 
+
+                navigate('/trip-planner', {
+                    state: {
                         editTripId: error.response.data.tripId || tripId,
                         mode: 'edit'
-                    } 
+                    }
                 });
                 return; // Exit early to avoid setting error
             } else {
@@ -91,7 +97,7 @@ const TripDetailView = () => {
             try {
                 setLoading(true);
                 setError(null);
-                
+
                 let response;
                 if (isCommunityTrip) {
                     // Use community API for community trips
@@ -100,7 +106,7 @@ const TripDetailView = () => {
                     // Use user API for personal trips
                     response = await getUserTripDetails(tripId);
                 }
-                
+
                 setTrip(response.trip);
 
                 // Fetch current user profile to check ownership (optional for community trips)
@@ -225,7 +231,7 @@ const TripDetailView = () => {
     const tripDuration = Math.ceil((new Date(trip.end_date) - new Date(trip.start_date)) / (1000 * 60 * 60 * 24)) + 1;
 
     return (
-        <div className="min-h-screen bg-gray-900">
+        <div className="min-h-screen bg-gray-900" id="trip-detail-container" >
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 {/* Back Button */}
                 <Button
@@ -237,6 +243,16 @@ const TripDetailView = () => {
                     Back
                 </Button>
 
+                <div className="trip-actions mb-4">
+                    <Button
+                        onClick={handleExportPDF}
+                        disabled={isGeneratingPDF}
+                        className="export-pdf-btn"
+                    >
+                        {isGeneratingPDF ? 'Generating PDF...' : 'Export as PDF'}
+                    </Button>
+                </div>
+
                 {/* Trip Header Section */}
                 <Card className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 mb-8">
                     <CardContent className="p-8">
@@ -247,7 +263,7 @@ const TripDetailView = () => {
                                     <h1 className="text-5xl font-bold text-gray-100 mb-4">{trip.title}</h1>
                                     <p className="text-xl text-gray-300 leading-relaxed">{trip.description}</p>
                                 </div>
-                                
+
                                 {/* Copy to Account Button - Only show for community trips that user doesn't own */}
                                 {isCommunityTrip && !isOwnTrip && (
                                     <div className="ml-8 flex-shrink-0">
@@ -285,11 +301,11 @@ const TripDetailView = () => {
                                 {isCommunityTrip && isOwnTrip && (
                                     <div className="ml-8 flex-shrink-0">
                                         <Button
-                                            onClick={() => navigate('/trip-planner', { 
-                                                state: { 
+                                            onClick={() => navigate('/trip-planner', {
+                                                state: {
                                                     editTripId: tripId,
-                                                    mode: 'edit' 
-                                                } 
+                                                    mode: 'edit'
+                                                }
                                             })}
                                             className="bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white"
                                         >
@@ -455,12 +471,11 @@ const TripDetailView = () => {
                                                             {activity.duration_minutes} mins
                                                         </span>
                                                     )}
-                                                    <span className={`px-2 py-1 rounded-full text-xs ${
-                                                        activity.status === 'planned' ? 'bg-blue-900/50 text-blue-300' :
-                                                        activity.status === 'booked' ? 'bg-green-900/50 text-green-300' :
-                                                        activity.status === 'completed' ? 'bg-gray-600/50 text-gray-300' :
-                                                        'bg-red-900/50 text-red-300'
-                                                    }`}>
+                                                    <span className={`px-2 py-1 rounded-full text-xs ${activity.status === 'planned' ? 'bg-blue-900/50 text-blue-300' :
+                                                            activity.status === 'booked' ? 'bg-green-900/50 text-green-300' :
+                                                                activity.status === 'completed' ? 'bg-gray-600/50 text-gray-300' :
+                                                                    'bg-red-900/50 text-red-300'
+                                                        }`}>
                                                         {activity.status}
                                                     </span>
                                                 </div>
@@ -481,7 +496,7 @@ const TripDetailView = () => {
                                     <DollarSign className="w-6 h-6 mr-3 text-green-400" />
                                     Budget & Cost Breakdown
                                 </h3>
-                                <TripBudgetBreakdown 
+                                <TripBudgetBreakdown
                                     trip={trip}
                                     activities={trip.activities || []}
                                     stops={trip.stops || []}
